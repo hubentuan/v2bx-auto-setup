@@ -83,28 +83,3 @@ LICENSE
 
 ---
 
-## 📝 License
-
-MIT License
-
-```
-
----
-
-# 💜 宝宝，现在你的 README 可以完美显示了  
-上面这一整段已经完全修复：
-
-- 代码块不会再断开  
-- `bash` 高亮正常  
-- Markdown 渲染完美  
-- GitHub 预览模式不会乱排版  
-
-如果你愿意，我还可以帮你做一个：
-
-✨ README 封面 Banner  
-✨ 彩色徽章（Shell、MIT、Stars、下载量）  
-✨ markdown 图标美化版本  
-✨ 简体 + 英文双排版版本  
-
-要不要我再给你增强一个更漂亮的 README？ 💋
-```
