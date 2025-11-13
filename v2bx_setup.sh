@@ -4,7 +4,7 @@ set -euo pipefail
 # ============================================
 #   风萧萧 · hubentuan
 #   V2bX 后端一键配置脚本（普通 / 家宽 / CDN）
-#   写入目录：/etc/V2bX/
+#   配置目录：/etc/V2bX/
 # ============================================
 
 CONFIG_DIR="/etc/V2bX"
@@ -20,61 +20,24 @@ need_root() {
 
 need_jq() {
   if ! command -v jq >/dev/null 2>&1; then
-    echo "❌ 未检测到 jq，请先安装："
+    echo "❌ 未检测到 jq，请先安装 jq："
     echo "   apt install jq   或   yum install jq"
     exit 1
   fi
 }
 
-# ========== 交互部分 ==========
+# ========== 标题 Banner ==========
 
-ask_basic_info() {
-  echo "======================================"
-  echo "         填写面板节点信息"
-  echo "======================================"
-  read -rp "ApiHost（例：https://panel.example.com）: " API_HOST
-  read -rp "ApiKey: " API_KEY
-
-  while true; do
-    read -rp "NodeID（必须是数字）: " NODE_ID
-    [[ "$NODE_ID" =~ ^[0-9]+$ ]] && break
-    echo "❌ NodeID 必须是数字，请重新输入。"
-  done
-}
-
-ask_s5_info() {
-  echo "======================================"
-  echo "        填写家宽 Socks5 代理信息"
-  echo "======================================"
-  read -rp "Socks5 地址（例：123.123.123.123 或 域名）: " S5_HOST
-
-  while true; do
-    read -rp "Socks5 端口（例：1080）: " S5_PORT
-    [[ "$S5_PORT" =~ ^[0-9]+$ ]] && break
-    echo "❌ 端口必须是数字，请重输。"
-  done
-
-  read -rp "Socks5 用户名（可留空）: " S5_USER
-  read -rsp "Socks5 密码（可留空）: " S5_PASS
-  echo
-}
-
-ask_cdn_info() {
-  echo "======================================"
-  echo "          填写 CDN 证书信息"
-  echo "======================================"
-  read -rp "证书域名（例：cdn.example.com）: " CERT_DOMAIN
-  echo "下面填写 Cloudflare 账号信息，用于 DNS 自动验证证书："
-  read -rp "Cloudflare 邮箱: " CF_EMAIL
-  read -rp "Cloudflare Global API Key: " CF_API_KEY
-
-  echo
-  echo "【重要操作提示】"
-  echo "1）先在 Cloudflare 中添加你的域名，并把上面的证书域名解析到本机 IP；"
-  echo "2）先关闭小黄云（仅 DNS 解析，不代理）；"
-  echo "3）启动 V2bX 后，在面板中按 8 查看日志，等待证书申请成功；"
-  echo "4）看到证书申请成功、节点正常工作后，再重新打开小黄云（开启 CDN）。"
-  echo
+print_banner() {
+  echo -e "\e[38;5;118m"
+  cat <<'EOF'
+╔════════════════════════════════════════════════════════════════════╗
+║                    Feng Xiao Xiao · 风萧萧 公益节点                ║
+║                       V2bX Backend Auto Setup                      ║
+║                             by hubentuan                           ║
+╚════════════════════════════════════════════════════════════════════╝
+EOF
+  echo -e "\e[0m"
 }
 
 # ========== 公用 DNS（所有模式通用） ==========
@@ -232,6 +195,62 @@ write_home_route() {
 EOF
 }
 
+# ========== 交互：面板基础信息 ==========
+
+ask_basic_info() {
+  echo "======================================"
+  echo "         填写面板节点信息"
+  echo "======================================"
+  read -rp "ApiHost（例：https://panel.example.com）: " API_HOST
+  read -rp "ApiKey（面板后端 Token）: " API_KEY
+
+  while true; do
+    read -rp "NodeID（必须是数字）: " NODE_ID
+    [[ "$NODE_ID" =~ ^[0-9]+$ ]] && break
+    echo "❌ NodeID 必须是数字，请重新输入。"
+  done
+}
+
+# ========== 交互：家宽 S5 信息 ==========
+
+ask_s5_info() {
+  echo "======================================"
+  echo "        填写家宽 Socks5 代理信息"
+  echo "======================================"
+  read -rp "Socks5 地址（例：123.123.123.123 或 域名）: " S5_HOST
+
+  while true; do
+    read -rp "Socks5 端口（例：1080）: " S5_PORT
+    [[ "$S5_PORT" =~ ^[0-9]+$ ]] && break
+    echo "❌ 端口必须是数字，请重输。"
+  done
+
+  read -rp "Socks5 用户名（可留空）: " S5_USER
+  read -rsp "Socks5 密码（可留空）: " S5_PASS
+  echo
+}
+
+# ========== 交互：CDN 证书信息（提示在配置前） ==========
+
+ask_cdn_info() {
+  echo "======================================"
+  echo "       CDN 模式使用说明（必读）"
+  echo "======================================"
+  echo "1）先在 Cloudflare 中添加你的域名，并把证书域名解析到本机 IP；"
+  echo "2）在 Cloudflare 面板【DNS】页，把这个记录的小黄云先关掉（仅 DNS）；"
+  echo "3）本脚本会写入 Cloudflare 邮箱 + Global API Key 到 DNSEnv；"
+  echo "4）配置完成后，启动 V2bX，并在面板里按 8 查看后端日志："
+  echo "   - 如果看到 ACME / 证书申请成功日志，则会在 /etc/V2bX/ 生成 fullchain.cer / cert.key；"
+  echo "5）证书申请成功、节点运行稳定后，再把小黄云打开，开始走 CDN 加速。"
+  echo "--------------------------------------"
+  echo
+
+  read -rp "证书域名（例：cdn.example.com）: " CERT_DOMAIN
+  echo "Cloudflare DNS 自动验证需要以下信息："
+  read -rp "Cloudflare 邮箱（登录 CF 的邮箱）: " CF_EMAIL
+  read -rp "Cloudflare Global API Key: " CF_API_KEY
+}
+
 # ========== 模板：普通节点 ==========
 
 write_single_templates() {
@@ -241,11 +260,17 @@ write_single_templates() {
 
   cat <<'EOF' >"$CONFIG_DIR/config.json"
 {
-  "Log": { "Level": "error", "Output": "" },
+  "Log": {
+    "Level": "error",
+    "Output": ""
+  },
   "Cores": [
     {
       "Type": "xray",
-      "Log": { "Level": "error", "ErrorPath": "/etc/V2bX/error.log" },
+      "Log": {
+        "Level": "error",
+        "ErrorPath": "/etc/V2bX/error.log"
+      },
       "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
       "RouteConfigPath": "/etc/V2bX/route.json",
       "DNSConfigPath": "/etc/V2bX/dns.json"
@@ -312,6 +337,8 @@ write_home_templates() {
       "Timeout": 30,
       "ListenIP": "0.0.0.0",
       "SendIP": "0.0.0.0",
+      "DeviceOnlineMinTraffic": 200,
+      "MinReportTraffic": 0,
       "EnableProxyProtocol": false,
       "EnableUot": true,
       "EnableTFO": true,
@@ -380,7 +407,7 @@ EOF
 EOF
 }
 
-# ========== 模板：CDN 节点（DNS 验证证书） ==========
+# ========== 模板：CDN 节点（DNS 证书） ==========
 
 write_cdn_templates() {
   mkdir -p "$CONFIG_DIR"
@@ -427,7 +454,7 @@ write_cdn_templates() {
         "CertDomain": "cdn.example.com",
         "CertFile": "/etc/V2bX/fullchain.cer",
         "KeyFile": "/etc/V2bX/cert.key",
-        "Email": "",
+        "Email": "v2bx@github.com",
         "Provider": "cloudflare",
         "DNSEnv": {
           "CLOUDFLARE_EMAIL": "",
@@ -444,7 +471,7 @@ EOF
   fi
 }
 
-# ========== 具体配置逻辑 ==========
+# ========== 配置逻辑：普通节点 ==========
 
 setup_single() {
   ask_basic_info
@@ -463,6 +490,8 @@ setup_single() {
 
   echo "✅ 普通 VLESS 节点配置完成"
 }
+
+# ========== 配置逻辑：家宽节点 ==========
 
 setup_home_s5() {
   ask_basic_info
@@ -512,6 +541,8 @@ setup_home_s5() {
   echo "✅ 家宽 Socks5 节点配置完成"
 }
 
+# ========== 配置逻辑：CDN 节点（DNS 证书） ==========
+
 setup_cdn() {
   ask_basic_info
   ask_cdn_info
@@ -534,55 +565,25 @@ setup_cdn() {
     --arg e "$CF_EMAIL" \
     --arg a "$CF_API_KEY" \
     '.Nodes[0].CertConfig.CertDomain = $d
-     | .Nodes[0].CertConfig.Email = $e
      | .Nodes[0].CertConfig.DNSEnv.CLOUDFLARE_EMAIL = $e
      | .Nodes[0].CertConfig.DNSEnv.CLOUDFLARE_API_KEY = $a' \
     "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp2"
   mv "$CONFIG_DIR/config.json.tmp2" "$CONFIG_DIR/config.json"
 
-  echo "✅ CDN 节点配置完成（DNS 自动验证证书）"
+  echo "✅ CDN 节点配置完成（Cloudflare DNS 自动申请证书）"
   echo
-  echo "请按以下步骤操作："
-  echo "1）确认证书域名已在 Cloudflare 解析到本机 IP；"
-  echo "2）小黄云保持关闭状态（仅 DNS）；"
-  echo "3）启动 V2bX 后，在面板中按 8 查看日志，等待证书申请成功；"
-  echo "4）证书正常签发后，再开启小黄云进行 CDN 加速。"
+  echo "下一步建议："
+  echo "1）确认 CF 中该域名解析到本机 IP，且小黄云关闭；"
+  echo "2）重启 V2bX 服务后，查看日志是否有证书申请成功记录；"
+  echo "3）证书申请成功、节点正常工作后，再开启小黄云。"
   echo
 }
 
-# ========== 界面 Banner ==========
+# ========== 安装全局命令 fxx ==========
 
-print_banner() {
-  echo -e "\e[38;5;118m"
-  cat <<'EOF'
-╔══════════════════════════════════════╗
-║    Feng Xiao Xiao · 风萧萧 公益节点   ║
-║          V2bX Backend Auto Setup     ║
-║              by hubentuan            ║
-╚══════════════════════════════════════╝
-EOF
-  echo -e "\e[0m"
-}
-
-# ========== 主菜单 ==========
-
-print_banner() {
-  echo -e "\e[38;5;118m"
-  cat <<'EOF'
-╔════════════════════════════════════════════════════════════════════╗
-║                    Feng Xiao Xiao · 风萧萧 公益节点                ║
-║                       V2bX Backend Auto Setup                      ║
-║                             by hubentuan                           ║
-╚════════════════════════════════════════════════════════════════════╝
-EOF
-  echo -e "\e[0m"
-}
-
-# 写入全局命令 fxx，方便随时呼出此面板
 install_global_cmd() {
   echo "正在写入全局命令 fxx ..."
 
-  # 当前脚本的绝对路径
   SCRIPT_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
 
   cat >/usr/local/bin/fxx <<EOF
@@ -593,9 +594,11 @@ EOF
   chmod +x /usr/local/bin/fxx
 
   echo "全局命令已安装：fxx"
-  echo "以后在任意目录输入 fxx 就可以重新打开这个面板。"
+  echo "以后可以在任意目录输入  fxx  来重新打开此面板。"
   echo
 }
+
+# ========== 主菜单 ==========
 
 menu() {
   clear
@@ -619,9 +622,11 @@ menu() {
   esac
 
   echo "--------------------------------------"
-  echo "配置完成！你可以重启 V2bX："
-  echo "systemctl restart v2bx-core"
+  echo "配置完成！你可以重启 V2bX 服务（例如）："
+  echo "systemctl restart V2bX"
 }
+
+# ========== 脚本入口 ==========
 
 need_root
 need_jq
