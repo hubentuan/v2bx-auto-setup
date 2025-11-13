@@ -544,11 +544,21 @@ setup_home_s5() {
 # ========== 配置逻辑：CDN 节点（DNS 证书） ==========
 
 setup_cdn() {
-  ask_basic_info
+  # 先显示 CDN 使用说明
   ask_cdn_info
+
+  echo
+  echo "======================================"
+  echo "         填写面板节点信息"
+  echo "======================================"
+
+  # 再填写面板信息
+  ask_basic_info
+
+  # 写入基础模板
   write_cdn_templates
 
-  # 面板信息
+  # 写入面板信息
   jq \
     --arg h "$API_HOST" \
     --arg k "$API_KEY" \
@@ -559,7 +569,7 @@ setup_cdn() {
     "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp"
   mv "$CONFIG_DIR/config.json.tmp" "$CONFIG_DIR/config.json"
 
-  # 证书域名 + CF 邮箱 + API Key
+  # 写入证书域名 + CF 邮箱 + API Key（Email 固定为 v2bx@github.com，不在这里改）
   jq \
     --arg d "$CERT_DOMAIN" \
     --arg e "$CF_EMAIL" \
