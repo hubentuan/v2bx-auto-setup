@@ -78,7 +78,6 @@ systemctl restart v2bx
 ```
 v2bx_setup.sh
 README.md
-LICENSE
 ```
 
 ---
