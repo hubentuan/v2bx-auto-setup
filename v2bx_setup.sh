@@ -566,6 +566,37 @@ EOF
 
 # ========== 主菜单 ==========
 
+print_banner() {
+  echo -e "\e[38;5;118m"
+  cat <<'EOF'
+╔════════════════════════════════════════════════════════════════════╗
+║                    Feng Xiao Xiao · 风萧萧 公益节点                ║
+║                       V2bX Backend Auto Setup                      ║
+║                             by hubentuan                           ║
+╚════════════════════════════════════════════════════════════════════╝
+EOF
+  echo -e "\e[0m"
+}
+
+# 写入全局命令 fxx，方便随时呼出此面板
+install_global_cmd() {
+  echo "正在写入全局命令 fxx ..."
+
+  # 当前脚本的绝对路径
+  SCRIPT_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
+
+  cat >/usr/local/bin/fxx <<EOF
+#!/usr/bin/env bash
+bash "$SCRIPT_PATH"
+EOF
+
+  chmod +x /usr/local/bin/fxx
+
+  echo "全局命令已安装：fxx"
+  echo "以后在任意目录输入 fxx 就可以重新打开这个面板。"
+  echo
+}
+
 menu() {
   clear
   print_banner
@@ -589,9 +620,10 @@ menu() {
 
   echo "--------------------------------------"
   echo "配置完成！你可以重启 V2bX："
-  echo "systemctl restart v2bx"
+  echo "systemctl restart v2bx-core"
 }
 
 need_root
 need_jq
+install_global_cmd
 menu
