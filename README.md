@@ -1,84 +1,52 @@
----
+v2bx-auto-setup 项目说明
 
-# ✅ **项目介绍**
-
-
-
----
-
-```markdown
-# v2bx-auto-setup  
-一键安装 & 配置 V2bX 后端（支持普通节点 / 家宽 S5 节点）
-
-本项目提供一个完全自动化的脚本，用于生成并写入 V2bX 后端所需的全部配置文件：
-
-```
+本项目提供一个自动化脚本，用于生成并写入 V2bX 后端所需的全部配置文件：
 
 /etc/V2bX/config.json
+
 /etc/V2bX/route.json
+
 /etc/V2bX/custom_outbound.json
 
-````
+所有模板均已内置于脚本中，无需提供额外文件。
 
-所有模板均已内置，无需额外文件。
-
----
-
-## 📦 1. 下载脚本
-
-```bash
+1. 下载脚本
 wget https://raw.githubusercontent.com/hubentuan/v2bx-auto-setup/main/v2bx_setup.sh
 chmod +x v2bx_setup.sh
-````
 
----
-
-## ▶️ 2. 运行脚本
-
-```bash
+2. 运行脚本
 sudo ./v2bx_setup.sh
-```
 
----
+3. 选择节点类型
 
-## 🔧 3. 选择节点类型
+普通 VLESS 单节点
 
-* **Single Node（普通 VLESS）**
-* **Home S5 Node（家宽代理）**
+家宽 Socks5 节点
 
----
+4. 填写节点信息
 
-## ✏️ 4. 填写信息
+脚本会要求填写：
 
-### 基本信息（两种模式都需要）：
+ApiHost
 
-* ApiHost
-* ApiKey
-* NodeID
+ApiKey
 
-### 家宽代理模式额外填写：
+NodeID
 
-* Socks5 地址
-* 端口
-* 用户名（可空）
-* 密码（可空）
+家宽模式额外需要填写：
 
----
+Socks5 地址
 
-## ♻️ 5. 重启 V2bX
+Socks5 端口
 
-```bash
+Socks5 用户名（可留空）
+
+Socks5 密码（可留空）
+
+5. 重启 V2bX
 systemctl restart v2bx
-```
 
----
-
-## 📁 项目结构
-
-```
+6. 项目文件结构
 v2bx_setup.sh
 README.md
-```
-
----
 
