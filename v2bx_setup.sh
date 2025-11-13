@@ -230,9 +230,9 @@ ask_s5_info() {
   echo
 }
 
-# ========== 交互：CDN 证书信息（提示在配置前） ==========
+# ========== 显示 CDN 使用说明 ==========
 
-ask_cdn_info() {
+show_cdn_instructions() {
   echo "======================================"
   echo "       CDN 模式使用说明（必读）"
   echo "======================================"
@@ -242,10 +242,20 @@ ask_cdn_info() {
   echo "4）配置完成后，启动 V2bX，并在面板里按 8 查看后端日志："
   echo "   - 如果看到 ACME / 证书申请成功日志，则会在 /etc/V2bX/ 生成 fullchain.cer / cert.key；"
   echo "5）证书申请成功、节点运行稳定后，再把小黄云打开，开始走 CDN 加速。"
-  echo "--------------------------------------"
+  echo "======================================"
   echo
+  read -rp "按 Enter 继续填写配置信息..."
+  echo
+}
 
+# ========== 交互：CDN 证书信息 ==========
+
+ask_cdn_cert_info() {
+  echo "======================================"
+  echo "        填写 CDN 证书配置信息"
+  echo "======================================"
   read -rp "证书域名（例：cdn.example.com）: " CERT_DOMAIN
+  echo
   echo "Cloudflare DNS 自动验证需要以下信息："
   read -rp "Cloudflare 邮箱（登录 CF 的邮箱）: " CF_EMAIL
   read -rp "Cloudflare Global API Key: " CF_API_KEY
@@ -544,21 +554,19 @@ setup_home_s5() {
 # ========== 配置逻辑：CDN 节点（DNS 证书） ==========
 
 setup_cdn() {
-  # 先显示 CDN 使用说明
-  ask_cdn_info
+  # 第一步：显示 CDN 使用说明
+  show_cdn_instructions
 
-  echo
-  echo "======================================"
-  echo "         填写面板节点信息"
-  echo "======================================"
-
-  # 再填写面板信息
+  # 第二步：填写面板信息
   ask_basic_info
 
-  # 写入基础模板
+  # 第三步：填写证书配置信息
+  ask_cdn_cert_info
+
+  # 第四步：写入基础模板
   write_cdn_templates
 
-  # 写入面板信息
+  # 第五步：写入面板信息
   jq \
     --arg h "$API_HOST" \
     --arg k "$API_KEY" \
@@ -569,7 +577,7 @@ setup_cdn() {
     "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp"
   mv "$CONFIG_DIR/config.json.tmp" "$CONFIG_DIR/config.json"
 
-  # 写入证书域名 + CF 邮箱 + API Key（Email 固定为 v2bx@github.com，不在这里改）
+  # 第六步：写入证书域名 + CF 邮箱 + API Key
   jq \
     --arg d "$CERT_DOMAIN" \
     --arg e "$CF_EMAIL" \
@@ -580,6 +588,7 @@ setup_cdn() {
     "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp2"
   mv "$CONFIG_DIR/config.json.tmp2" "$CONFIG_DIR/config.json"
 
+  echo
   echo "✅ CDN 节点配置完成（Cloudflare DNS 自动申请证书）"
   echo
   echo "下一步建议："
