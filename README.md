@@ -56,8 +56,9 @@ sudo ./v2bx_setup.sh
 ## **5. 重启 V2bX**
 
 ```bash
-systemctl restart v2bx
+v2bx
 ```
+然后输入6
 
 ---
 
