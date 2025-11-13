@@ -2,12 +2,14 @@
 set -euo pipefail
 
 # ============================================
-#   V2bX 后端一键配置脚本（含通用 DNS）
+#   风萧萧 · hubentuan
+#   V2bX 后端一键配置脚本（普通 / 家宽 / CDN）
 #   写入目录：/etc/V2bX/
-#   所有真实 ApiHost / ApiKey 由用户输入
 # ============================================
 
 CONFIG_DIR="/etc/V2bX"
+
+# ========== 基础检查 ==========
 
 need_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -24,15 +26,17 @@ need_jq() {
   fi
 }
 
+# ========== 交互部分 ==========
+
 ask_basic_info() {
   echo "======================================"
-  echo "         填写节点面板信息"
+  echo "         填写面板节点信息"
   echo "======================================"
-  read -rp "请输入 ApiHost（例：https://panel.example.com）: " API_HOST
-  read -rp "请输入 ApiKey: " API_KEY
+  read -rp "ApiHost（例：https://panel.example.com）: " API_HOST
+  read -rp "ApiKey: " API_KEY
 
   while true; do
-    read -rp "请输入 NodeID（必须是数字）: " NODE_ID
+    read -rp "NodeID（必须是数字）: " NODE_ID
     [[ "$NODE_ID" =~ ^[0-9]+$ ]] && break
     echo "❌ NodeID 必须是数字，请重新输入。"
   done
@@ -42,7 +46,7 @@ ask_s5_info() {
   echo "======================================"
   echo "        填写家宽 Socks5 代理信息"
   echo "======================================"
-  read -rp "Socks5 地址（例：123.123.123.123）: " S5_HOST
+  read -rp "Socks5 地址（例：123.123.123.123 或 域名）: " S5_HOST
 
   while true; do
     read -rp "Socks5 端口（例：1080）: " S5_PORT
@@ -55,10 +59,26 @@ ask_s5_info() {
   echo
 }
 
-# -----------------------------
-# 写入通用 DNS 配置 /etc/V2bX/dns.json
-# 所有节点通用
-# -----------------------------
+ask_cdn_info() {
+  echo "======================================"
+  echo "          填写 CDN 证书信息"
+  echo "======================================"
+  read -rp "证书域名（例：cdn.example.com）: " CERT_DOMAIN
+  echo "下面填写 Cloudflare 账号信息，用于 DNS 自动验证证书："
+  read -rp "Cloudflare 邮箱: " CF_EMAIL
+  read -rp "Cloudflare Global API Key: " CF_API_KEY
+
+  echo
+  echo "【重要操作提示】"
+  echo "1）先在 Cloudflare 中添加你的域名，并把上面的证书域名解析到本机 IP；"
+  echo "2）先关闭小黄云（仅 DNS 解析，不代理）；"
+  echo "3）启动 V2bX 后，在面板中按 8 查看日志，等待证书申请成功；"
+  echo "4）看到证书申请成功、节点正常工作后，再重新打开小黄云（开启 CDN）。"
+  echo
+}
+
+# ========== 公用 DNS（所有模式通用） ==========
+
 write_dns_template() {
   mkdir -p "$CONFIG_DIR"
 
@@ -131,51 +151,10 @@ write_dns_template() {
 EOF
 }
 
-# -----------------------------
-# 写入：普通节点配置模板
-# ApiHost / ApiKey / NodeID 为占位，后面用 jq 覆盖
-# -----------------------------
-write_single_templates() {
-  mkdir -p "$CONFIG_DIR"
+# ========== 路由 ==========
 
-  # 通用 DNS（普通节点也需要）
-  write_dns_template
-
-  # config.json（普通节点）
-  cat <<'EOF' >"$CONFIG_DIR/config.json"
-{
-  "Log": { "Level": "error", "Output": "" },
-  "Cores": [
-    {
-      "Type": "xray",
-      "Log": { "Level": "error", "ErrorPath": "/etc/V2bX/error.log" },
-      "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
-      "RouteConfigPath": "/etc/V2bX/route.json",
-      "DNSConfigPath": "/etc/V2bX/dns.json"
-    }
-  ],
-  "Nodes": [
-    {
-      "Core": "xray",
-      "ApiHost": "https://example.com",
-      "ApiKey": "",
-      "NodeID": 1,
-      "NodeType": "vless",
-      "Timeout": 30,
-      "ListenIP": "0.0.0.0",
-      "SendIP": "0.0.0.0",
-      "DeviceOnlineMinTraffic": 200,
-      "MinReportTraffic": 0,
-      "EnableProxyProtocol": false,
-      "EnableUot": true,
-      "EnableTFO": true,
-      "DNSType": "UseIPv4"
-    }
-  ]
-}
-EOF
-
-  # 普通路由（与面板无关，不含敏感信息）
+# 普通节点 + CDN 共用
+write_common_route() {
   cat <<'EOF' >"$CONFIG_DIR/route.json"
 {
   "domainStrategy": "IPOnDemand",
@@ -208,71 +187,10 @@ EOF
   ]
 }
 EOF
-
-  # 给普通节点一个空的 custom_outbound.json（防止路径报错）
-  if [[ ! -f "$CONFIG_DIR/custom_outbound.json" ]]; then
-    echo '{}' > "$CONFIG_DIR/custom_outbound.json"
-  fi
 }
 
-# -----------------------------
-# 写入：家宽节点配置模板
-# 同样不包含真实 ApiHost / ApiKey
-# -----------------------------
-write_home_templates() {
-  mkdir -p "$CONFIG_DIR"
-
-  # 通用 DNS（家宽节点同样需要）
-  write_dns_template
-
-  # config.json（家宽节点）
-  cat <<'EOF' >"$CONFIG_DIR/config.json"
-{
-  "Log": { "Level": "error", "Output": "" },
-  "Cores": [
-    {
-      "Type": "xray",
-      "Log": { "Level": "error", "ErrorPath": "/etc/V2bX/error.log" },
-      "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
-      "RouteConfigPath": "/etc/V2bX/route.json",
-      "DNSConfigPath": "/etc/V2bX/dns.json"
-    }
-  ],
-  "Nodes": [
-    {
-      "Core": "xray",
-      "ApiHost": "https://example.com",
-      "ApiKey": "",
-      "NodeID": 1,
-      "NodeType": "vless",
-      "Timeout": 30,
-      "ListenIP": "0.0.0.0",
-      "SendIP": "0.0.0.0",
-      "Port": 1234,
-      "EnableProxyProtocol": false,
-      "EnableUot": true,
-      "EnableTFO": true,
-      "DNSType": "UseIPv4",
-      "VlessFlow": "xtls-rprx-vision",
-      "CertConfig": {
-        "CertMode": "reality",
-        "RejectUnknownSni": false,
-        "Dest": "example.com:443",
-        "ServerNames": [
-          "example.com"
-        ],
-        "PrivateKey": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "ShortIds": [
-          ""
-        ],
-        "Fingerprint": "chrome"
-      }
-    }
-  ]
-}
-EOF
-
-  # 家宽路由（inboundTag 用占位，后面根据 ApiHost + NodeID 重写）
+# 家宽专用
+write_home_route() {
   cat <<'EOF' >"$CONFIG_DIR/route.json"
 {
   "domainStrategy": "AsIs",
@@ -312,8 +230,97 @@ EOF
   ]
 }
 EOF
+}
 
-  # custom_outbound.json（Socks5 占位，后面用用户输入覆盖）
+# ========== 模板：普通节点 ==========
+
+write_single_templates() {
+  mkdir -p "$CONFIG_DIR"
+  write_dns_template
+  write_common_route
+
+  cat <<'EOF' >"$CONFIG_DIR/config.json"
+{
+  "Log": { "Level": "error", "Output": "" },
+  "Cores": [
+    {
+      "Type": "xray",
+      "Log": { "Level": "error", "ErrorPath": "/etc/V2bX/error.log" },
+      "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
+      "RouteConfigPath": "/etc/V2bX/route.json",
+      "DNSConfigPath": "/etc/V2bX/dns.json"
+    }
+  ],
+  "Nodes": [
+    {
+      "Core": "xray",
+      "ApiHost": "https://example.com",
+      "ApiKey": "",
+      "NodeID": 1,
+      "NodeType": "vless",
+      "Timeout": 30,
+      "ListenIP": "0.0.0.0",
+      "SendIP": "0.0.0.0",
+      "DeviceOnlineMinTraffic": 200,
+      "MinReportTraffic": 0,
+      "EnableProxyProtocol": false,
+      "EnableUot": true,
+      "EnableTFO": true,
+      "DNSType": "UseIPv4"
+    }
+  ]
+}
+EOF
+
+  if [[ ! -f "$CONFIG_DIR/custom_outbound.json" ]]; then
+    echo '{}' > "$CONFIG_DIR/custom_outbound.json"
+  fi
+}
+
+# ========== 模板：家宽节点 ==========
+
+write_home_templates() {
+  mkdir -p "$CONFIG_DIR"
+  write_dns_template
+  write_home_route
+
+  cat <<'EOF' >"$CONFIG_DIR/config.json"
+{
+  "Log": {
+    "Level": "error",
+    "Output": ""
+  },
+  "Cores": [
+    {
+      "Type": "xray",
+      "Log": {
+        "Level": "error",
+        "ErrorPath": "/etc/V2bX/error.log"
+      },
+      "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
+      "RouteConfigPath": "/etc/V2bX/route.json",
+      "DNSConfigPath": "/etc/V2bX/dns.json"
+    }
+  ],
+  "Nodes": [
+    {
+      "Core": "xray",
+      "ApiHost": "https://example.com",
+      "ApiKey": "",
+      "NodeID": 1,
+      "NodeType": "vless",
+      "Timeout": 30,
+      "ListenIP": "0.0.0.0",
+      "SendIP": "0.0.0.0",
+      "EnableProxyProtocol": false,
+      "EnableUot": true,
+      "EnableTFO": true,
+      "DNSType": "UseIPv4"
+    }
+  ]
+}
+EOF
+
   cat <<'EOF' >"$CONFIG_DIR/custom_outbound.json"
 [
   {
@@ -373,9 +380,72 @@ EOF
 EOF
 }
 
-# -----------------------------
-# 配置普通节点
-# -----------------------------
+# ========== 模板：CDN 节点（DNS 验证证书） ==========
+
+write_cdn_templates() {
+  mkdir -p "$CONFIG_DIR"
+  write_dns_template
+  write_common_route
+
+  cat <<'EOF' >"$CONFIG_DIR/config.json"
+{
+  "Log": {
+    "Level": "error",
+    "Output": ""
+  },
+  "Cores": [
+    {
+      "Type": "xray",
+      "Log": {
+        "Level": "error",
+        "ErrorPath": "/etc/V2bX/error.log"
+      },
+      "OutboundConfigPath": "/etc/V2bX/custom_outbound.json",
+      "RouteConfigPath": "/etc/V2bX/route.json",
+      "DNSConfigPath": "/etc/V2bX/dns.json"
+    }
+  ],
+  "Nodes": [
+    {
+      "Core": "xray",
+      "ApiHost": "https://example.com",
+      "ApiKey": "",
+      "NodeID": 1,
+      "NodeType": "vless",
+      "Timeout": 30,
+      "ListenIP": "0.0.0.0",
+      "SendIP": "0.0.0.0",
+      "DeviceOnlineMinTraffic": 200,
+      "MinReportTraffic": 0,
+      "EnableProxyProtocol": false,
+      "EnableUot": true,
+      "EnableTFO": true,
+      "DNSType": "UseIPv4",
+      "CertConfig": {
+        "CertMode": "dns",
+        "RejectUnknownSni": false,
+        "CertDomain": "cdn.example.com",
+        "CertFile": "/etc/V2bX/fullchain.cer",
+        "KeyFile": "/etc/V2bX/cert.key",
+        "Email": "",
+        "Provider": "cloudflare",
+        "DNSEnv": {
+          "CLOUDFLARE_EMAIL": "",
+          "CLOUDFLARE_API_KEY": ""
+        }
+      }
+    }
+  ]
+}
+EOF
+
+  if [[ ! -f "$CONFIG_DIR/custom_outbound.json" ]]; then
+    echo '{}' > "$CONFIG_DIR/custom_outbound.json"
+  fi
+}
+
+# ========== 具体配置逻辑 ==========
+
 setup_single() {
   ask_basic_info
   write_single_templates
@@ -391,18 +461,14 @@ setup_single() {
 
   mv "$CONFIG_DIR/config.json.tmp" "$CONFIG_DIR/config.json"
 
-  echo "✅ 普通节点配置完成"
+  echo "✅ 普通 VLESS 节点配置完成"
 }
 
-# -----------------------------
-# 配置家宽 S5 节点
-# -----------------------------
 setup_home_s5() {
   ask_basic_info
   ask_s5_info
   write_home_templates
 
-  # 覆盖 config.json 的 ApiHost / ApiKey / NodeID
   jq \
     --arg h "$API_HOST" \
     --arg k "$API_KEY" \
@@ -413,7 +479,6 @@ setup_home_s5() {
     "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp"
   mv "$CONFIG_DIR/config.json.tmp" "$CONFIG_DIR/config.json"
 
-  # route.json 中 inboundTag 跟随 ApiHost + NodeID
   jq \
     --arg h "$API_HOST" \
     --arg n "$NODE_ID" \
@@ -421,9 +486,7 @@ setup_home_s5() {
     "$CONFIG_DIR/route.json" >"$CONFIG_DIR/route.json.tmp"
   mv "$CONFIG_DIR/route.json.tmp" "$CONFIG_DIR/route.json"
 
-  # custom_outbound.json 中写入 Socks5 信息
   if [[ -z "$S5_USER" && -z "$S5_PASS" ]]; then
-    # 无账号密码，删除 users 字段
     jq \
       --arg host "$S5_HOST" \
       --argjson port "$S5_PORT" \
@@ -446,18 +509,72 @@ setup_home_s5() {
 
   mv "$CONFIG_DIR/custom_outbound.json.tmp" "$CONFIG_DIR/custom_outbound.json"
 
-  echo "✅ 家宽 S5 节点配置完成"
+  echo "✅ 家宽 Socks5 节点配置完成"
 }
 
-# -----------------------------
-# 主菜单
-# -----------------------------
+setup_cdn() {
+  ask_basic_info
+  ask_cdn_info
+  write_cdn_templates
+
+  # 面板信息
+  jq \
+    --arg h "$API_HOST" \
+    --arg k "$API_KEY" \
+    --argjson n "$NODE_ID" \
+    '.Nodes[0].ApiHost=$h
+     | .Nodes[0].ApiKey=$k
+     | .Nodes[0].NodeID=$n' \
+    "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp"
+  mv "$CONFIG_DIR/config.json.tmp" "$CONFIG_DIR/config.json"
+
+  # 证书域名 + CF 邮箱 + API Key
+  jq \
+    --arg d "$CERT_DOMAIN" \
+    --arg e "$CF_EMAIL" \
+    --arg a "$CF_API_KEY" \
+    '.Nodes[0].CertConfig.CertDomain = $d
+     | .Nodes[0].CertConfig.Email = $e
+     | .Nodes[0].CertConfig.DNSEnv.CLOUDFLARE_EMAIL = $e
+     | .Nodes[0].CertConfig.DNSEnv.CLOUDFLARE_API_KEY = $a' \
+    "$CONFIG_DIR/config.json" >"$CONFIG_DIR/config.json.tmp2"
+  mv "$CONFIG_DIR/config.json.tmp2" "$CONFIG_DIR/config.json"
+
+  echo "✅ CDN 节点配置完成（DNS 自动验证证书）"
+  echo
+  echo "请按以下步骤操作："
+  echo "1）确认证书域名已在 Cloudflare 解析到本机 IP；"
+  echo "2）小黄云保持关闭状态（仅 DNS）；"
+  echo "3）启动 V2bX 后，在面板中按 8 查看日志，等待证书申请成功；"
+  echo "4）证书正常签发后，再开启小黄云进行 CDN 加速。"
+  echo
+}
+
+# ========== 界面 Banner ==========
+
+print_banner() {
+  echo -e "\e[38;5;118m"
+  cat <<'EOF'
+╔══════════════════════════════════════╗
+║    Feng Xiao Xiao · 风萧萧 公益节点   ║
+║          V2bX Backend Auto Setup     ║
+║              by hubentuan            ║
+╚══════════════════════════════════════╝
+EOF
+  echo -e "\e[0m"
+}
+
+# ========== 主菜单 ==========
+
 menu() {
+  clear
+  print_banner
   echo "======================================"
-  echo "         V2bX 后端一键配置脚本"
+  echo "           V2bX 后端一键配置脚本"
   echo "======================================"
   echo "  1) 配置普通 VLESS 单节点"
   echo "  2) 配置家宽 Socks5 节点"
+  echo "  3) 配置 CDN 节点（Cloudflare DNS 证书）"
   echo "  q) 退出脚本"
   echo "--------------------------------------"
   read -rp "请选择: " choice
@@ -465,6 +582,7 @@ menu() {
   case "$choice" in
     1) setup_single ;;
     2) setup_home_s5 ;;
+    3) setup_cdn ;;
     q|Q) echo "已退出"; exit 0 ;;
     *) echo "❌ 无效选择"; exit 1 ;;
   esac
@@ -477,4 +595,3 @@ menu() {
 need_root
 need_jq
 menu
-
