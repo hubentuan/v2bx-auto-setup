@@ -19,11 +19,49 @@ need_root() {
 }
 
 need_jq() {
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "❌ 未检测到 jq，请先安装 jq："
-    echo "   apt install jq   或   yum install jq"
+  # 已安装就直接跳过
+  if command -v jq >/dev/null 2>&1; then
+    echo "✅ 已检测到 jq，跳过安装。"
+    return
+  fi
+
+  echo "⚠️ 未检测到 jq，正在尝试自动安装..."
+
+  # 不同发行版分别尝试
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "→ 检测到 apt-get，使用 apt-get 安装 jq..."
+    apt-get update -y && apt-get install -y jq
+  elif command -v apt >/dev/null 2>&1; then
+    echo "→ 检测到 apt，使用 apt 安装 jq..."
+    apt update -y && apt install -y jq
+  elif command -v yum >/dev/null 2>&1; then
+    echo "→ 检测到 yum，使用 yum 安装 jq..."
+    yum install -y jq
+  elif command -v dnf >/dev/null 2>&1; then
+    echo "→ 检测到 dnf，使用 dnf 安装 jq..."
+    dnf install -y jq
+  elif command -v apk >/dev/null 2>&1; then
+    echo "→ 检测到 apk，使用 apk 安装 jq..."
+    apk add --no-cache jq
+  elif command -v pacman >/dev/null 2>&1; then
+    echo "→ 检测到 pacman，使用 pacman 安装 jq..."
+    pacman -Sy --noconfirm jq
+  elif command -v zypper >/dev/null 2>&1; then
+    echo "→ 检测到 zypper，使用 zypper 安装 jq..."
+    zypper install -y jq
+  else
+    echo "❌ 无法自动识别包管理器，请手动安装 jq 后重新运行本脚本。"
+    echo "   例如：apt install jq  或  yum install jq"
     exit 1
   fi
+
+  # 再检查一次是否安装成功
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "❌ 已尝试自动安装 jq，但仍未检测到。请手动安装后重试。"
+    exit 1
+  fi
+
+  echo "✅ jq 安装成功。"
 }
 
 # ========== 标题 Banner ==========
